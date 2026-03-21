@@ -1,0 +1,69 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/schemas/listing_package.schema.json",
+  "title": "ListingPackage",
+  "type": "object",
+  "required": [
+    "product_id",
+    "task_id",
+    "target_market",
+    "shop_id",
+    "category",
+    "title",
+    "main_images",
+    "sub_images",
+    "detail_images",
+    "a_plus_images",
+    "description_blocks",
+    "attributes",
+    "skus",
+    "price_strategy",
+    "publish_mode",
+    "review_status",
+    "workflow"
+  ],
+  "properties": {
+    "product_id": {"type": "string", "minLength": 1},
+    "task_id": {"type": "string", "minLength": 1},
+    "target_market": {"type": "string", "minLength": 1},
+    "shop_id": {"type": "string", "minLength": 1},
+    "category": {"type": "string", "minLength": 1},
+    "title": {"type": "string"},
+    "main_images": {"type": "array", "items": {"type": "string"}},
+    "sub_images": {"type": "array", "items": {"type": "string"}},
+    "detail_images": {"type": "array", "items": {"type": "string"}},
+    "a_plus_images": {"type": "array", "items": {"type": "string"}},
+    "description_blocks": {"type": "array", "items": {"type": "object"}},
+    "attributes": {"type": "object"},
+    "skus": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["sku_id", "variant", "price", "inventory"],
+        "properties": {
+          "sku_id": {"type": "string"},
+          "variant": {"type": "object"},
+          "price": {"type": "number"},
+          "inventory": {"type": "integer"}
+        }
+      }
+    },
+    "price_strategy": {"type": "object"},
+    "publish_mode": {"type": "string"},
+    "review_status": {
+      "type": "object",
+      "required": ["image_review", "copy_review"],
+      "properties": {
+        "image_review": {"type": "string"},
+        "copy_review": {"type": "string"}
+      }
+    },
+    "workflow": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {"type": "string"}
+      }
+    }
+  }
+}

@@ -1,0 +1,2 @@
+market,shop_id,shop_name,login_mode,default_shipping_template,default_warehouse,currency
+TH,shop_demo,示例店铺,cookie,default_th,warehouse_th,THB

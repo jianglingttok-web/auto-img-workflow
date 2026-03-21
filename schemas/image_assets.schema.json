@@ -1,0 +1,15 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/schemas/image_assets.schema.json",
+  "title": "ImageAssets",
+  "type": "object",
+  "required": ["product_id", "main_images", "sub_images", "detail_images", "a_plus_images", "generation_meta"],
+  "properties": {
+    "product_id": {"type": "string"},
+    "main_images": {"type": "array", "items": {"type": "string"}},
+    "sub_images": {"type": "array", "items": {"type": "string"}},
+    "detail_images": {"type": "array", "items": {"type": "string"}},
+    "a_plus_images": {"type": "array", "items": {"type": "string"}},
+    "generation_meta": {"type": "object"}
+  }
+}

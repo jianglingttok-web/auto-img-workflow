@@ -1,0 +1,14 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/schemas/copy_assets.schema.json",
+  "title": "CopyAssets",
+  "type": "object",
+  "required": ["product_id", "title", "bullet_points", "description_blocks", "a_plus_copy"],
+  "properties": {
+    "product_id": {"type": "string"},
+    "title": {"type": "string"},
+    "bullet_points": {"type": "array", "items": {"type": "string"}},
+    "description_blocks": {"type": "array", "items": {"type": "object"}},
+    "a_plus_copy": {"type": "array", "items": {"type": "string"}}
+  }
+}

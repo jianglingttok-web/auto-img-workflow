@@ -1,0 +1,25 @@
+﻿{
+  "任务ID": "IMG-20260319-0001",
+  "产品ID": "P-FS-0001",
+  "提交人": "运营A",
+  "运营组": "泰国组",
+  "店铺": "shop_demo",
+  "站点": "TH",
+  "产品名称": "Cooling Gel Patch",
+  "类目建议": "Beauty & Personal Care",
+  "产品卖点": "轻便小巧\n方便携带\n适合夏季使用",
+  "风格要求": "原生感\n转化导向\n平台合规",
+  "产品白底图": [
+    {"name": "product_white_01.jpg", "path": "product_white_01.jpg"}
+  ],
+  "使用图": [
+    {"name": "usage_01.jpg", "path": "usage_01.jpg"}
+  ],
+  "参考链接": "https://example.com/item1\nhttps://example.com/item2",
+  "主图数量": 1,
+  "副图数量": 8,
+  "营销表达": "买一送一\n效果不满意就退",
+  "数字信息": "12h\n1700ml",
+  "补充说明": "不要夸张功效，不要强医疗感",
+  "合规要求": "不得出现医疗宣称\n不得出现极限词"
+}

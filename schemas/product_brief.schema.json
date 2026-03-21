@@ -1,0 +1,31 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/schemas/product_brief.schema.json",
+  "title": "ProductBrief",
+  "type": "object",
+  "required": [
+    "product_id",
+    "product_name",
+    "shop_id",
+    "target_market",
+    "category_hint",
+    "selling_points"
+  ],
+  "properties": {
+    "product_id": {"type": "string"},
+    "product_name": {"type": "string"},
+    "shop_id": {"type": "string"},
+    "target_market": {"type": "string"},
+    "category_hint": {"type": "string"},
+    "selling_points": {"type": "array", "items": {"type": "string"}},
+    "target_user": {"type": "string"},
+    "price_range": {"type": "string"},
+    "style": {"type": "string"},
+    "image_rules": {"type": "object"},
+    "attribute_template": {"type": "object"},
+    "sku_template": {"type": "array", "items": {"type": "object"}},
+    "competitor_links": {"type": "array", "items": {"type": "string"}},
+    "compliance_rules": {"type": "array", "items": {"type": "string"}},
+    "notes": {"type": "string"}
+  }
+}

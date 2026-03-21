@@ -1,0 +1,10 @@
+field_key,field_name,required,enum_source,notes
+category,类目,TRUE,,填写 TikTok 目标类目
+brand,品牌,FALSE,,如类目强制则改为 TRUE
+product_name,商品标题,TRUE,,受标题规则约束
+main_image,主图,TRUE,,文件路径或上传后 URL
+gallery_images,副图,TRUE,,多图列表
+weight,重量,TRUE,,单位需和站点一致
+price,价格,TRUE,,由价格公式计算
+inventory,库存,TRUE,,默认值需站点确认
+shipping_template,物流模板,TRUE,,从店铺映射表选择

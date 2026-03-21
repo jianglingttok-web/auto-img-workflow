@@ -1,0 +1,30 @@
+﻿env: dev
+
+ark:
+  api_key: "${ARK_API_KEY}"
+  base_url: "https://ark.cn-beijing.volces.com/api/v3"
+  seedream_model: "doubao-seedream-4-5-251128"
+  image_size: "2K"
+  response_format: "url"
+  stream: false
+  watermark: false
+
+ziniu:
+  base_url: ""
+  api_key: ""
+  browser_profile_id: ""
+
+feishu:
+  webhook_url: ""
+  app_id: ""
+  app_secret: ""
+
+paths:
+  assets_root: "./runtime/assets"
+  logs_root: "./runtime/logs"
+  screenshots_root: "./runtime/screenshots"
+
+publish:
+  mode: "draft"
+  retry_times: 2
+  timeout_seconds: 30
