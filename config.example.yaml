@@ -4,8 +4,10 @@ ark:
   api_key: "${ARK_API_KEY}"
   base_url: "https://ark.cn-beijing.volces.com/api/v3"
   seedream_model: "doubao-seedream-4-5-251128"
+  text_model: "doubao-seed-2-0-lite-260215"
+  text_temperature: 0.3
   image_size: "2K"
-  response_format: "url"
+  response_format: "b64_json"
   stream: false
   watermark: false
 
@@ -15,9 +17,13 @@ ziniu:
   browser_profile_id: ""
 
 feishu:
+  base_url: "https://open.feishu.cn"
   webhook_url: ""
-  app_id: ""
-  app_secret: ""
+  app_id: "${FEISHU_APP_ID}"
+  app_secret: "${FEISHU_APP_SECRET}"
+  image_task_app_token: "${FEISHU_IMAGE_TASK_APP_TOKEN}"
+  image_task_table_id: "${FEISHU_IMAGE_TASK_TABLE_ID}"
+  image_task_view_id: "${FEISHU_IMAGE_TASK_VIEW_ID}"
 
 paths:
   assets_root: "./runtime/assets"

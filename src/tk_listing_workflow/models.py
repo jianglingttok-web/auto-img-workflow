@@ -26,7 +26,7 @@ ALLOWED_TRANSITIONS = {
     "product_created": {"image_generation_pending", "publish_failed"},
     "image_generation_pending": {"image_review_pending", "publish_failed"},
     "image_review_pending": {"image_review_passed", "manual_check_pending", "publish_failed"},
-    "image_review_passed": {"copy_generation_pending", "publish_failed"},
+    "image_review_passed": {"image_generation_pending", "copy_generation_pending", "completed", "publish_failed"},
     "copy_generation_pending": {"copy_review_pending", "publish_failed"},
     "copy_review_pending": {"copy_review_passed", "manual_check_pending", "publish_failed"},
     "copy_review_passed": {"listing_ready", "publish_failed"},
@@ -35,7 +35,7 @@ ALLOWED_TRANSITIONS = {
     "publishing": {"publish_success", "publish_failed", "manual_check_pending"},
     "publish_success": {"completed"},
     "publish_failed": {"manual_check_pending"},
-    "manual_check_pending": {"completed", "publish_pending", "publish_failed"},
+    "manual_check_pending": {"image_generation_pending", "completed", "publish_pending", "publish_failed"},
     "completed": set(),
 }
 
@@ -120,3 +120,4 @@ class ListingPackage:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+

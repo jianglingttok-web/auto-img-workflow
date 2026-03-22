@@ -4,6 +4,8 @@ import base64
 import json
 import mimetypes
 import os
+import ssl
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -17,6 +19,9 @@ from ..storage import read_json, write_json
 DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
 DEFAULT_MODEL = "doubao-seedream-4-5-251128"
 DEFAULT_SIZE = "2K"
+DEFAULT_HTTP_RETRIES = 3
+DEFAULT_RETRY_DELAY_SECONDS = 2.0
+RETRYABLE_HTTP_STATUS = {408, 429, 500, 502, 503, 504}
 
 
 @dataclass(slots=True)
@@ -29,6 +34,8 @@ class SeedreamConfig:
     stream: bool = False
     watermark: bool = False
     sequential_image_generation: str = "disabled"
+    http_retries: int = DEFAULT_HTTP_RETRIES
+    retry_delay_seconds: float = DEFAULT_RETRY_DELAY_SECONDS
 
 
 class SeedreamExecutor:
@@ -39,6 +46,9 @@ class SeedreamExecutor:
 
     @classmethod
     def from_env(cls) -> "SeedreamExecutor":
+        from ..config import bootstrap_runtime_environment
+
+        bootstrap_runtime_environment()
         config = SeedreamConfig(
             api_key=os.environ.get("ARK_API_KEY", ""),
             base_url=os.environ.get("ARK_BASE_URL", DEFAULT_BASE_URL),
@@ -47,6 +57,8 @@ class SeedreamExecutor:
             response_format=os.environ.get("SEEDREAM_RESPONSE_FORMAT", "url"),
             stream=os.environ.get("SEEDREAM_STREAM", "false").lower() == "true",
             watermark=os.environ.get("SEEDREAM_WATERMARK", "false").lower() == "true",
+            http_retries=max(int(os.environ.get("SEEDREAM_HTTP_RETRIES", str(DEFAULT_HTTP_RETRIES)) or DEFAULT_HTTP_RETRIES), 1),
+            retry_delay_seconds=max(float(os.environ.get("SEEDREAM_RETRY_DELAY_SECONDS", str(DEFAULT_RETRY_DELAY_SECONDS)) or DEFAULT_RETRY_DELAY_SECONDS), 0.0),
         )
         return cls(config)
 
@@ -113,9 +125,10 @@ class SeedreamExecutor:
             return ""
         if self._is_url(text):
             return text
-        path = Path(text)
+        normalized_text = text.replace("\\", "/")
+        path = Path(normalized_text)
         if not path.is_absolute():
-            path = task_dir / "intake" / text if not text.startswith("runtime/") else Path(text)
+            path = Path(normalized_text) if normalized_text.startswith("runtime/") else task_dir / "intake" / text
         if not path.exists():
             raise FileNotFoundError(f"reference image not found: {value}")
         mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
@@ -133,14 +146,20 @@ class SeedreamExecutor:
             },
             method="POST",
         )
-        try:
+
+        def send() -> dict[str, Any]:
             with urlopen(request, timeout=300) as response:
                 return json.loads(response.read().decode("utf-8"))
+
+        try:
+            return self._with_retries(send, operation="Seedream API request")
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
             raise RuntimeError(f"Seedream API HTTP {exc.code}: {detail}") from exc
         except URLError as exc:
             raise RuntimeError(f"Seedream API network error: {exc}") from exc
+        except ssl.SSLError as exc:
+            raise RuntimeError(f"Seedream API SSL error: {exc}") from exc
 
     def _save_response_images(self, task_dir: Path, round_number: int, job: dict[str, Any], response: dict[str, Any]) -> list[str]:
         items = response.get("data", [])
@@ -166,8 +185,37 @@ class SeedreamExecutor:
 
     def _download_file(self, url: str, path: Path) -> None:
         request = Request(url, method="GET")
-        with urlopen(request, timeout=300) as response:
-            path.write_bytes(response.read())
+
+        def download() -> bytes:
+            with urlopen(request, timeout=300) as response:
+                return response.read()
+
+        payload = self._with_retries(download, operation=f"Seedream image download for {path.name}")
+        path.write_bytes(payload)
+
+    def _with_retries(self, action, *, operation: str):
+        attempts = self.config.http_retries
+        delay_seconds = self.config.retry_delay_seconds
+        last_error: Exception | None = None
+
+        for attempt in range(1, attempts + 1):
+            try:
+                return action()
+            except HTTPError as exc:
+                last_error = exc
+                if exc.code not in RETRYABLE_HTTP_STATUS or attempt >= attempts:
+                    raise
+            except (URLError, ssl.SSLError) as exc:
+                last_error = exc
+                if attempt >= attempts:
+                    raise
+
+            if delay_seconds > 0:
+                time.sleep(delay_seconds)
+
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError(f"{operation} failed without a captured exception")
 
     def _guess_extension(self, url: str) -> str:
         parsed = urlparse(url)

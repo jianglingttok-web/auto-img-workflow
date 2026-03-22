@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from math import ceil
 from pathlib import Path
@@ -109,5 +109,6 @@ class PreviewBuilder:
         try:
             from PIL import Image, ImageDraw, ImageFont
         except ModuleNotFoundError as exc:
-            raise RuntimeError("Pillow is required for build-previews. Install it with `py -3 -m pip install Pillow`.") from exc
+            raise RuntimeError("Pillow is required for build-previews. Install it with `python -m pip install Pillow` or `pip install -e .`.") from exc
         return Image, ImageDraw, ImageFont
+
