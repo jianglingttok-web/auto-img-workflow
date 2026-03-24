@@ -6,6 +6,7 @@ import mimetypes
 import os
 import ssl
 import time
+from http.client import IncompleteRead
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -160,6 +161,8 @@ class SeedreamExecutor:
             raise RuntimeError(f"Seedream API network error: {exc}") from exc
         except ssl.SSLError as exc:
             raise RuntimeError(f"Seedream API SSL error: {exc}") from exc
+        except IncompleteRead as exc:
+            raise RuntimeError(f"Seedream API incomplete read: {exc}") from exc
 
     def _save_response_images(self, task_dir: Path, round_number: int, job: dict[str, Any], response: dict[str, Any]) -> list[str]:
         items = response.get("data", [])
@@ -205,7 +208,7 @@ class SeedreamExecutor:
                 last_error = exc
                 if exc.code not in RETRYABLE_HTTP_STATUS or attempt >= attempts:
                     raise
-            except (URLError, ssl.SSLError) as exc:
+            except (URLError, ssl.SSLError, IncompleteRead) as exc:
                 last_error = exc
                 if attempt >= attempts:
                     raise

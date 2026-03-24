@@ -10,11 +10,14 @@ from .executors.seedream import SeedreamExecutor
 from .integrations import FeishuBitableClient, FeishuNotifier
 from .intake.feishu_mapper import FeishuImageTaskMapper
 from .media import ImageAssetsBuilder, PreviewBuilder
+from .models import utc_now_iso
 from .storage import read_json, write_json
 from .task_manager import InvalidTransitionError, TaskManager
 
 _ATTACHMENT_PREFIX = {
     "产品白底图": "product_white",
+    "参考图": "reference",
+    "裂变参考图": "fission_ref",
     "使用图": "usage",
     "已有主图/风格参考图": "style_ref",
 }
@@ -46,12 +49,20 @@ class LocalFeishuImageWorker:
     def run_forever(self, *, poll_interval_seconds: int = 30) -> None:
         interval = max(int(poll_interval_seconds), 5)
         while True:
-            self.run_once()
+            try:
+                self.run_once()
+            except Exception as exc:
+                print({"ok": False, "worker_error": str(exc)})
             time.sleep(interval)
 
     def run_once(self) -> dict[str, Any]:
         results: list[dict[str, Any]] = []
-        for decision in self._iter_runnable_decisions():
+        try:
+            decisions = list(self._iter_runnable_decisions())
+        except Exception as exc:
+            return {"ok": False, "count": 0, "results": [], "error": str(exc)}
+
+        for decision in decisions:
             task_id = str(decision.get("task_id", "") or "")
             if self.task_id_filter and task_id != self.task_id_filter:
                 continue
@@ -128,10 +139,15 @@ class LocalFeishuImageWorker:
         preview_payload = PreviewBuilder().build_round_previews(task_dir, round_number)
         image_assets = ImageAssetsBuilder().sync_round(task_dir, round_number)
         self._safe_advance(task_dir, "image_review_pending", note=f"worker generated {stage} assets")
+        manifest = read_json(task_dir / "manifest.json")
+        manifest.setdefault("reviews", {})["pending_stage"] = stage
+        manifest["reviews"]["pending_round"] = round_number
+        write_json(task_dir / "manifest.json", manifest)
         backfill = {"skipped": True, "reason": "sync_bitable_record disabled"}
         if self.sync_bitable_record:
             backfill = self._backfill_review_assets(task_dir, record_id=record_id, round_number=round_number, stage=stage)
         notify = self._notify_review(task_dir, record=record, round_number=round_number, stage=stage)
+        self._sync_review_pending_state(task_dir, round_number=round_number, stage=stage)
 
         result = {
             "ok": True,
@@ -248,6 +264,7 @@ class LocalFeishuImageWorker:
             task_dir=task_dir,
             review_status=_DEFAULT_IMAGE_REVIEW_STATUS,
             workflow_status=_REVIEW_STATUS_BY_STAGE[stage],
+            review_stage=stage,
             receiver_open_id=recipient["receive_id"],
             receiver_name=recipient["name"],
         )
@@ -262,6 +279,67 @@ class LocalFeishuImageWorker:
         result["result_path"] = str(result_path)
         return result
 
+    def _sync_review_pending_state(self, task_dir: Path, *, round_number: int, stage: str) -> None:
+        manifest_path = task_dir / "manifest.json"
+        manifest = read_json(manifest_path)
+        manifest["status"] = "image_review_pending"
+        manifest["updated_at"] = utc_now_iso()
+        manifest.setdefault("reviews", {})["pending_stage"] = stage
+        manifest["reviews"]["pending_round"] = round_number
+        manifest.setdefault("events", []).append(
+            {
+                "timestamp": utc_now_iso(),
+                "event": "review_notification_sent",
+                "detail": {
+                    "round": round_number,
+                    "stage": stage,
+                },
+            }
+        )
+        write_json(manifest_path, manifest)
+
+        listing_package_path = task_dir / "listing_package.json"
+        if listing_package_path.is_file():
+            package = read_json(listing_package_path)
+            package.setdefault("workflow", {})["status"] = "image_review_pending"
+            write_json(listing_package_path, package)
+    def _record_notification_error(self, task_dir: Path, *, round_number: int, stage: str, error_message: str) -> dict[str, Any]:
+        payload = {
+            "ok": False,
+            "task_id": task_dir.name,
+            "round": round_number,
+            "stage": stage,
+            "error": str(error_message or "").strip(),
+        }
+        result_path = task_dir / "review" / f"round_{round_number:02d}_feishu_notification_error.json"
+        write_json(result_path, payload)
+
+        manifest_path = task_dir / "manifest.json"
+        manifest = read_json(manifest_path)
+        manifest["updated_at"] = utc_now_iso()
+        manifest.setdefault("errors", []).append(
+            {
+                "timestamp": utc_now_iso(),
+                "stage": "feishu_notification",
+                "round": round_number,
+                "image_stage": stage,
+                "message": payload["error"],
+            }
+        )
+        manifest.setdefault("events", []).append(
+            {
+                "timestamp": utc_now_iso(),
+                "event": "feishu_notification_failed",
+                "detail": {
+                    "round": round_number,
+                    "stage": stage,
+                    "error": payload["error"],
+                },
+            }
+        )
+        write_json(manifest_path, manifest)
+        payload["result_path"] = str(result_path)
+        return payload
     def _resolve_notification_recipient(self, record: dict[str, Any]) -> dict[str, str]:
         fields = record.get("fields", {}) if isinstance(record, dict) else {}
         for field_name in ("提交人", "审核人"):
@@ -338,13 +416,15 @@ class LocalFeishuImageWorker:
         latest_round = int(summary.get("latest_round", 1) or 1)
         local_status = self._load_local_manifest_status(str(summary.get("task_id", "") or ""))
 
-        if local_status and local_status not in {"product_created", "image_generation_pending"}:
+        # The Feishu table is now only an intake surface. Once a local task exists,
+        # all follow-up review and rerun transitions must stay inside the local state machine.
+        if local_status and local_status != "product_created":
             return {
                 **summary,
                 "local_status": local_status,
                 "runnable": False,
                 "next_action": "local_workflow_active",
-                "reason": f"????? {local_status}???????????",
+                "reason": f"local task already entered workflow state {local_status}; skip table-triggered rerun",
             }
 
         if review_status == "已打回" and task_status == "待生成副图":
@@ -491,3 +571,8 @@ class LocalFeishuImageWorker:
 
     def _record_id(self, item: dict[str, Any]) -> str:
         return str(item.get("record_id", "") or item.get("id", "") or "")
+
+
+
+
+

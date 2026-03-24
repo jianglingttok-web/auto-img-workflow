@@ -7,7 +7,17 @@ name = "tk-listing-workflow"
 version = "0.1.0"
 description = "MVP scaffold for TikTok automated listing workflow"
 requires-python = ">=3.11"
-dependencies = ["Pillow>=11.0.0", "PyYAML>=6.0.2", "lark-oapi>=1.5.3", "websockets==13.1"]
+dependencies = [
+  "Pillow>=11.0.0",
+  "PyYAML>=6.0.2",
+  "lark-oapi>=1.5.3",
+  "websockets==13.1",
+  "fastapi>=0.116.0",
+  "uvicorn>=0.35.0",
+  "python-multipart>=0.0.20",
+  "aiofiles>=24.1.0",
+  "httpx>=0.28.1"
+]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

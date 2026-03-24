@@ -1,0 +1,157 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TK 裂变素材工厂</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="page">
+    <section class="panel hero">
+      <h1>TK 裂变素材工厂</h1>
+      <p>统一入口、统一模型、统一成本。提交后自动排队执行，结果直接下载。</p>
+    </section>
+
+    <section class="panel">
+      <form id="task-form">
+        <div class="grid">
+          <label>
+            <span>组别</span>
+            <select name="group_name" id="group_name" required></select>
+          </label>
+          <label>
+            <span>组密码</span>
+            <input type="password" name="group_password" required />
+          </label>
+          <label>
+            <span>运营名</span>
+            <input type="text" name="operator_name" placeholder="可选" />
+          </label>
+          <label>
+            <span>站点</span>
+            <select name="site" id="site" required></select>
+          </label>
+          <label>
+            <span>裂变类型</span>
+            <select name="fission_type" id="fission_type" required></select>
+          </label>
+          <label>
+            <span>模型</span>
+            <select name="model_id" id="model_id" required></select>
+          </label>
+          <label>
+            <span>生成数量</span>
+            <input type="number" name="count" min="1" max="10" value="4" required />
+          </label>
+          <label class="full">
+            <span>补充说明</span>
+            <textarea name="notes" rows="3" placeholder="可选"></textarea>
+          </label>
+          <label>
+            <span>产品白底图</span>
+            <input type="file" name="product_image" accept="image/*" required />
+          </label>
+          <label>
+            <span>参考图</span>
+            <input type="file" name="reference_image" accept="image/*" required />
+          </label>
+        </div>
+        <div class="actions">
+          <button type="submit" id="submit-btn">提交任务</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel" id="status-panel" hidden>
+      <h2>任务状态</h2>
+      <dl class="status-grid" id="status-grid"></dl>
+      <div class="actions">
+        <a id="download-link" class="button secondary" href="#" hidden>下载结果 ZIP</a>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById('task-form');
+    const statusPanel = document.getElementById('status-panel');
+    const statusGrid = document.getElementById('status-grid');
+    const downloadLink = document.getElementById('download-link');
+    let currentTaskId = '';
+    let pollTimer = null;
+
+    function renderOptions(payload) {
+      const groupSelect = document.getElementById('group_name');
+      const siteSelect = document.getElementById('site');
+      const typeSelect = document.getElementById('fission_type');
+      const modelSelect = document.getElementById('model_id');
+      groupSelect.innerHTML = payload.groups.map(v => `<option value="${v}">${v}</option>`).join('');
+      siteSelect.innerHTML = payload.sites.map(v => `<option value="${v}">${v}</option>`).join('');
+      typeSelect.innerHTML = payload.fission_types.map(v => `<option value="${v.value}">${v.label}${v.experimental ? '（实验）' : ''}</option>`).join('');
+      modelSelect.innerHTML = payload.models.map(v => `<option value="${v.model_id}">${v.label}</option>`).join('');
+    }
+
+    function renderStatus(payload) {
+      const rows = [
+        ['任务ID', payload.task_id],
+        ['状态', payload.status],
+        ['排队位置', payload.queue_position],
+        ['组别', payload.group_name],
+        ['运营名', payload.operator_name || '-'],
+        ['站点', payload.site],
+        ['裂变类型', payload.fission_type],
+        ['模型', payload.model_id],
+        ['数量', payload.count],
+        ['预估成本', `$${Number(payload.estimated_cost || 0).toFixed(2)}`],
+        ['实际成本', payload.actual_cost == null ? '-' : `$${Number(payload.actual_cost).toFixed(2)}`],
+        ['产出数量', payload.result_count],
+        ['错误', payload.error_message || '-'],
+      ];
+      statusGrid.innerHTML = rows.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('');
+      statusPanel.hidden = false;
+      if (payload.download_url) {
+        downloadLink.hidden = false;
+        downloadLink.href = payload.download_url;
+      } else {
+        downloadLink.hidden = true;
+      }
+    }
+
+    async function fetchOptions() {
+      const res = await fetch('/api/options');
+      renderOptions(await res.json());
+    }
+
+    async function pollTask(taskId) {
+      const res = await fetch(`/api/tasks/${taskId}`);
+      if (!res.ok) return;
+      const payload = await res.json();
+      renderStatus(payload);
+      if (['succeeded', 'failed', 'expired'].includes(payload.status)) {
+        window.clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const submitBtn = document.getElementById('submit-btn');
+      submitBtn.disabled = true;
+      const data = new FormData(form);
+      const res = await fetch('/api/tasks', { method: 'POST', body: data });
+      const payload = await res.json();
+      submitBtn.disabled = false;
+      if (!res.ok) {
+        alert(payload.detail || '提交失败');
+        return;
+      }
+      currentTaskId = payload.task_id;
+      await pollTask(currentTaskId);
+      if (pollTimer) window.clearInterval(pollTimer);
+      pollTimer = window.setInterval(() => pollTask(currentTaskId), 3000);
+    });
+
+    fetchOptions();
+  </script>
+</body>
+</html>

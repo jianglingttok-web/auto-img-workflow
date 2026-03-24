@@ -205,7 +205,7 @@ foreach ($name in @(
 }
 
 Add-Result -Status "PASS" -Check "Config wiring" -Detail "CLI now auto-loads project-root .env and config.yaml before running commands."
-Add-Result -Status "INFO" -Check "Feishu/Ziniu" -Detail "Feishu notifier and Ziniu integration are still placeholders in the current codebase."
+Add-Result -Status "INFO" -Check "Feishu workflow" -Detail "Feishu long-connection review loop is enabled locally; verify .env credentials and long-connection processes before handing off to operations."
 
 $runtimeRoot = Join-Path $ProjectRoot "runtime"
 $tempCheckDir = Join-Path $runtimeRoot ".env-check-write-test"

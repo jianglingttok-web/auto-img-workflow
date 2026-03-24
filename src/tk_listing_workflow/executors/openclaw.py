@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import os
@@ -216,6 +216,8 @@ class OpenClawExecutor:
                 "product_id": payload.get("product_id", ""),
                 "product_name": payload.get("product_name", ""),
                 "category_hint": payload.get("category_hint", ""),
+                "use_case": payload.get("use_case", ""),
+                "variation_scope": payload.get("variation_scope", ""),
                 "site": payload.get("site", ""),
                 "shop_id": payload.get("shop_id", ""),
             },
@@ -414,8 +416,9 @@ class OpenClawExecutor:
 
     def _extract_variables(self, payload: dict[str, Any]) -> dict[str, Any]:
         return {
-            "style_summary": self._join(payload.get("style_requirements", []), sep="；") or "干净、统一、适合电商转化",
-            "usage_scene_summary": "；".join(self._summarize_usage(payload)),
+            "style_summary": self._join(payload.get("style_requirements", []), sep="?") or "????????????",
+            "variation_scope": str(payload.get("variation_scope", "") or "").strip(),
+            "usage_scene_summary": "?".join(self._summarize_usage(payload)),
             "marketing_phrases": payload.get("marketing_phrases", []),
             "numeric_claims": payload.get("numeric_claims", []),
             "selling_points": payload.get("selling_points", []),
@@ -579,12 +582,23 @@ class OpenClawExecutor:
 
     def _main_visual_direction(self, payload: dict[str, Any], prompt_mode: str) -> str:
         product_text = " ".join(self._flatten_text(payload.get("product_name", ""), payload.get("category_hint", ""), payload.get("notes", "")))
-        if any(keyword in product_text for keyword in self.JEWELRY_KEYWORDS):
-            return "女性锁骨近景佩戴，项链位于画面中心，暖金或奶油色高级室内氛围，柔和侧光，浅景深，珠宝金属光泽清晰"
-        if prompt_mode == "benefit_copy":
-            return "产品居中陈列，主体占画面一半以上，背景简洁，信息分区清晰，适合承载一条短文案"
-        return "主体居中或轻微偏心构图，背景干净有层次，商业摄影光线明确，产品细节锐利"
+        refs = payload.get("reference_images", {}) if isinstance(payload, dict) else {}
+        style_refs = refs.get("style_reference_images", []) or refs.get("fission_reference", [])
+        task_type = str(payload.get("task_type", "") or "").strip()
+        use_case = str(payload.get("use_case", "") or "").strip()
+        variation_scope = str(payload.get("variation_scope", "") or "").strip()
 
+        if task_type == "same_style_product_swap":
+            return "严格延续参考图的整体风格、光线、构图和氛围，但主体必须替换为本次提交的新产品，避免改成另一种视觉体系。"
+        if task_type == "same_product_fission" or use_case == "image-to-image-fission" or style_refs:
+            if variation_scope:
+                return f"以参考图为主导延续视觉风格与主体呈现，保持同款产品不变，仅在允许范围内调整背景、构图或镜头语言：{variation_scope}"
+            return "以参考图为主导延续视觉风格与主体呈现，保持同款产品不变，只做受控的场景和构图变化。"
+        if any(keyword in product_text for keyword in self.JEWELRY_KEYWORDS):
+            return "????????????????????????????????????????????????"
+        if prompt_mode == "benefit_copy":
+            return "??????????????????????????????????????"
+        return "???????????????????????????????????"
     def _supports_refined_composite_layout(self, payload: dict[str, Any]) -> bool:
         text_blob = " ".join(
             self._flatten_text(
@@ -646,9 +660,19 @@ class OpenClawExecutor:
         refs = payload.get("reference_images", {})
         usage_images = refs.get("usage_images", [])
         if usage_images:
-            return ["参考使用图的场景氛围、动作和构图，但产品真实性以白底图为准"]
-        return ["无使用图时围绕产品卖点构建自然、简洁、高级的展示场景"]
+            return ["?????????????????????????????"]
 
+        style_refs = refs.get("style_reference_images", []) or refs.get("fission_reference", [])
+        task_type = str(payload.get("task_type", "") or "").strip()
+        variation_scope = str(payload.get("variation_scope", "") or "").strip()
+        if task_type == "same_style_product_swap":
+            return ["参考图用于锁定整体风格、构图和光线，新产品主体必须来自本次提交的白底图商品。"]
+        if style_refs:
+            if variation_scope:
+                return [f"参考图用于锁定同款产品的视觉方向，仅在允许范围内做受控变化：{variation_scope}"]
+            return ["参考图用于锁定同款产品的视觉方向，只允许受控的背景或构图变化。"]
+
+        return ["??????????????????????????"]
     def _join(self, values: list[str], sep: str = "，") -> str:
         cleaned = [str(value).strip() for value in values if str(value).strip()]
         return sep.join(cleaned)
@@ -665,6 +689,8 @@ class OpenClawExecutor:
                 if text:
                     parts.append(text)
         return parts
+
+
 
 
 

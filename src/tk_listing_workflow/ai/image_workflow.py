@@ -40,7 +40,10 @@ class StandardizedImageTask:
     task_mode: str
     main_image_count: int
     sub_image_count: int
+    task_type: str = ""
     category_hint: str = ""
+    use_case: str = ""
+    variation_scope: str = ""
     operator_group: str = ""
     submitter: str = ""
     style: list[str] = field(default_factory=list)
@@ -70,11 +73,14 @@ class ImageWorkflowBuilder:
         payload = {
             "task_id": task["task_id"],
             "task_mode": task["task_mode"],
+            "task_type": task.get("task_type", ""),
             "product_id": task["product_id"],
             "product_name": task["product_name"],
             "site": task["target_market"],
             "shop_id": task["shop_id"],
             "category_hint": task.get("category_hint", ""),
+            "use_case": task.get("use_case", ""),
+            "variation_scope": task.get("variation_scope", ""),
             "operator_group": task.get("operator_group", ""),
             "submitter": task.get("submitter", ""),
             "selling_points": task.get("selling_points", []),
@@ -116,12 +122,30 @@ class ImageWorkflowBuilder:
         competitor_links = self._ensure_list(product_brief.get("competitor_links", []))
         marketing_phrases = self._ensure_list(intake_payload.get("营销表达", []))
         numeric_claims = self._ensure_list(intake_payload.get("数字信息", []))
+        task_type = str(product_brief.get("task_type", "") or "").strip()
+
+        brief_refs = product_brief.get("reference_images", {}) if isinstance(product_brief, dict) else {}
+        unified_reference_images = self._collect_attachment_paths(intake_payload.get("参考图"), task_dir)
+        legacy_fission_refs = self._collect_attachment_paths(intake_payload.get("裂变参考图"), task_dir)
+        legacy_style_refs = self._collect_attachment_paths(intake_payload.get("已有主图/风格参考图"), task_dir)
 
         reference_images = ReferenceImages(
             product_white_background=self._collect_attachment_paths(intake_payload.get("产品白底图"), task_dir),
             usage_images=self._collect_attachment_paths(intake_payload.get("使用图"), task_dir),
-            style_reference_images=self._collect_attachment_paths(intake_payload.get("已有主图/风格参考图"), task_dir),
+            style_reference_images=unified_reference_images or legacy_style_refs,
         )
+
+        if not reference_images.style_reference_images and legacy_fission_refs:
+            reference_images.style_reference_images = legacy_fission_refs
+
+        if not reference_images.product_white_background:
+            reference_images.product_white_background = self._ensure_list(brief_refs.get("product_white_background", []))
+        if not reference_images.usage_images:
+            reference_images.usage_images = self._ensure_list(brief_refs.get("usage_images", []))
+        if not reference_images.style_reference_images:
+            reference_images.style_reference_images = self._ensure_list(brief_refs.get("style_reference_images", []))
+        if not reference_images.style_reference_images:
+            reference_images.style_reference_images = self._ensure_list(brief_refs.get("fission_reference", []))
 
         if not reference_images.product_white_background:
             fallback_white = self._collect_local_assets(task_dir / "intake", prefixes=("product_white", "white", "main_ref"))
@@ -130,11 +154,14 @@ class ImageWorkflowBuilder:
             fallback_usage = self._collect_local_assets(task_dir / "intake", prefixes=("usage", "scene", "wear"))
             reference_images.usage_images.extend(fallback_usage)
         if not reference_images.style_reference_images:
-            fallback_style = self._collect_local_assets(task_dir / "intake", prefixes=("style_ref", "existing_main", "main_style"))
+            fallback_style = self._collect_local_assets(
+                task_dir / "intake",
+                prefixes=("reference", "style_ref", "existing_main", "main_style", "fission_ref"),
+            )
             reference_images.style_reference_images.extend(fallback_style)
 
         if task_mode == "sub_only" and not reference_images.style_reference_images:
-            raise ValueError("sub_only mode requires 已有主图/风格参考图 or matching local style reference image")
+            raise ValueError("sub_only mode requires existing main / style reference image or matching local style reference image")
 
         return StandardizedImageTask(
             task_id=product_brief["task_id"],
@@ -146,8 +173,11 @@ class ImageWorkflowBuilder:
             main_image_count=main_count,
             sub_image_count=sub_count,
             category_hint=product_brief.get("category_hint", ""),
-            operator_group=str(intake_payload.get("运营组", "")).strip(),
-            submitter=str(intake_payload.get("提交人", "")).strip(),
+            task_type=task_type,
+            use_case=product_brief.get("use_case", ""),
+            variation_scope=product_brief.get("variation_scope", ""),
+            operator_group=str(intake_payload.get("运营组", "") or "").strip(),
+            submitter=str(intake_payload.get("提交人", "") or "").strip(),
             style=style,
             selling_points=selling_points,
             compliance_rules=compliance_rules,
@@ -157,7 +187,6 @@ class ImageWorkflowBuilder:
             notes=product_brief.get("notes", ""),
             reference_images=reference_images,
         )
-
     def _read_optional(self, path: Path) -> dict[str, Any]:
         if not path.exists():
             return {}
@@ -276,3 +305,6 @@ class SeedreamJobPlanner:
         }
         write_json(task_dir / "prompts" / f"round_{round_number:02d}_seedream_jobs.json", payload)
         return payload
+
+
+

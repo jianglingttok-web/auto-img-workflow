@@ -16,9 +16,54 @@ ziniu:
   api_key: ""
   browser_profile_id: ""
 
+web:
+  host: "0.0.0.0"
+  port: 8000
+  max_concurrent: 4
+  cleanup_ttl_hours: 48
+  cleanup_interval_hours: 24
+  site_options: ["TH", "ID", "MY", "PH", "VN", "SG"]
+
+prompt_engine:
+  provider: volcengine
+  model_id: doubao-seed-2-0-lite-260215
+  temperature: 0.3
+
+groups:
+  展:
+    password: "${GROUP_PASSWORD_ZHAN}"
+  雁鑫:
+    password: "${GROUP_PASSWORD_YANXIN}"
+  潮城:
+    password: "${GROUP_PASSWORD_CHAOCHENG}"
+  涛哥:
+    password: "${GROUP_PASSWORD_TAOGE}"
+  华哥:
+    password: "${GROUP_PASSWORD_HUAGE}"
+  鬼哥:
+    password: "${GROUP_PASSWORD_GUIGE}"
+  强哥:
+    password: "${GROUP_PASSWORD_QIANGGE}"
+  锴:
+    password: "${GROUP_PASSWORD_KAI}"
+
+providers:
+  volcengine:
+    enabled: true
+    api_key: "${VOLCANO_ENGINE_API_KEY}"
+    base_url: "https://ark.cn-beijing.volces.com/api/v3"
+    models:
+      - id: doubao-seedream-fast
+        name: 豆包 Seedream (快速)
+        price_per_image: 0.04
+      - id: doubao-seedream-4-5-251128
+        name: 豆包 Seedream (标准)
+        price_per_image: 0.08
+
 feishu:
+  enabled: false
+  webhook: "${FEISHU_WEBHOOK}"
   base_url: "https://open.feishu.cn"
-  webhook_url: ""
   app_id: "${FEISHU_APP_ID}"
   app_secret: "${FEISHU_APP_SECRET}"
   image_task_app_token: "${FEISHU_IMAGE_TASK_APP_TOKEN}"

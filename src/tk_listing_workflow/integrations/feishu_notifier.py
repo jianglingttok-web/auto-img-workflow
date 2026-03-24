@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import mimetypes
@@ -23,13 +23,31 @@ class FeishuNotifier:
         receive_id = str(payload.get("receiver_open_id", "") or "")
         if not receive_id:
             raise ValueError(f"{stage} notification missing receiver_open_id")
-
         if stage == "image_review":
             return self.notify_image_review(receive_id=receive_id, payload=payload)
         if stage == "image_delivery":
             return self.notify_image_delivery(receive_id=receive_id, payload=payload)
-
         raise ValueError(f"unsupported Feishu notification stage: {stage}")
+
+    def notify_text(self, *, receive_id: str, text: str, receive_id_type: str = "open_id") -> dict[str, Any]:
+        rendered = str(text or "").strip()
+        if not receive_id:
+            raise ValueError("text notification missing receive_id")
+        if not rendered:
+            raise ValueError("text notification missing text")
+        message = self._send_message(
+            receive_id=receive_id,
+            receive_id_type=receive_id_type,
+            msg_type="text",
+            content={"text": rendered},
+        )
+        return {
+            "ok": True,
+            "receive_id": receive_id,
+            "receive_id_type": receive_id_type,
+            "text": rendered,
+            "message": message,
+        }
 
     def build_image_review_payload(
         self,
@@ -40,18 +58,17 @@ class FeishuNotifier:
         task_dir: Path,
         bundle_link: str = "",
         review_status: str = "待审核",
-        workflow_status: str = "待审核副图",
+        workflow_status: str = "待审核裂变图",
         table_link: str = "",
         receiver_open_id: str = "",
         receiver_name: str = "",
+        review_stage: str = "main",
     ) -> dict[str, Any]:
         round_dir = task_dir / "media" / f"round_{round_number:02d}"
         main_preview = self._pick_first_file(round_dir / "preview", prefixes=("main_preview",))
         if not main_preview:
             main_preview = self._pick_first_file(round_dir / "main")
-
         sub_contact_sheet = self._pick_first_file(round_dir / "preview", prefixes=("sub_contact_sheet", "sub_grid", "sub_preview"))
-
         return {
             "task_id": task_id,
             "product_name": product_name,
@@ -64,7 +81,8 @@ class FeishuNotifier:
             "table_link": table_link,
             "receiver_open_id": receiver_open_id,
             "receiver_name": receiver_name,
-            "actions": ["通过", "打回"],
+            "review_stage": review_stage,
+            "actions": ["通过", "重做"],
         }
 
     def build_image_delivery_payload(
@@ -77,7 +95,7 @@ class FeishuNotifier:
         bundle_link: str = "",
         bundle_path: str = "",
         delivery_status: str = "已交付",
-        workflow_status: str = "image_review_passed",
+        workflow_status: str = "completed",
         receiver_open_id: str = "",
         receiver_name: str = "",
         include_images: bool = False,
@@ -86,7 +104,6 @@ class FeishuNotifier:
         image_files = self._collect_round_images(task_dir, round_number)
         if not image_files:
             raise FileNotFoundError(f"no generated images found for round {round_number}: {task_dir}")
-
         round_dir = task_dir / "media" / f"round_{round_number:02d}"
         main_preview = self._pick_first_file(round_dir / "preview", prefixes=("main_preview",))
         sub_contact_sheet = self._pick_first_file(round_dir / "preview", prefixes=("sub_contact_sheet", "sub_grid", "sub_preview"))
@@ -110,12 +127,12 @@ class FeishuNotifier:
         }
 
     def notify_image_review(self, *, receive_id: str, payload: dict[str, Any], receive_id_type: str = "open_id") -> dict[str, Any]:
-        text = self._build_image_review_text(payload)
-        text_result = self._send_message(
+        card = self._build_image_review_card(payload)
+        card_result = self._send_message(
             receive_id=receive_id,
             receive_id_type=receive_id_type,
-            msg_type="text",
-            content={"text": text},
+            msg_type="interactive",
+            content={"card": json.dumps(card, ensure_ascii=False)},
         )
         image_results = self._send_image_files(
             receive_id=receive_id,
@@ -129,7 +146,7 @@ class FeishuNotifier:
             "ok": True,
             "receive_id": receive_id,
             "receive_id_type": receive_id_type,
-            "text_message": text_result,
+            "card_message": card_result,
             "image_messages": image_results,
             "payload": payload,
         }
@@ -175,30 +192,74 @@ class FeishuNotifier:
             "payload": payload,
         }
 
-    def _build_image_review_text(self, payload: dict[str, Any]) -> str:
-        lines = ["图片审核通知"]
-        receiver_name = str(payload.get("receiver_name", "") or "")
-        if receiver_name:
-            lines.append(f"收件人：{receiver_name}")
-        lines.extend(
-            [
-                f"任务ID：{payload.get('task_id', '')}",
-                f"产品：{payload.get('product_name', '')}",
-                f"轮次：第{payload.get('current_round', '')}轮",
-                f"任务状态：{payload.get('workflow_status', '')}",
-                f"审核状态：{payload.get('review_status', '')}",
-                "主图预览和副图拼图将分别随消息发送，请直接查看并反馈。",
-            ]
+    def _build_image_review_card(self, payload: dict[str, Any]) -> dict[str, Any]:
+        task_id = str(payload.get("task_id", "") or "")
+        product_name = str(payload.get("product_name", "") or "")
+        current_round = int(payload.get("current_round", 1) or 1)
+        review_stage = str(payload.get("review_stage", "main") or "main").strip().lower()
+        workflow_status = str(payload.get("workflow_status", "") or "")
+        review_status = str(payload.get("review_status", "") or "")
+        summary = (
+            f"**任务ID**：{task_id}\n"
+            f"**产品**：{product_name}\n"
+            f"**轮次**：第{current_round}轮\n"
+            f"**任务状态**：{workflow_status}\n"
+            f"**审核状态**：{review_status}"
         )
-        bundle_link = str(payload.get("bundle_link", "") or "")
-        if bundle_link:
-            lines.append(f"完整图片包：{bundle_link}")
-        table_link = str(payload.get("table_link", "") or "")
-        if table_link:
-            lines.append(f"任务表链接：{table_link}")
-        lines.append("回复示例：通过 cck04")
-        lines.append("回复示例：打回 cck04 审核意见：主图佩戴角度太正，想更偏侧脸和锁骨特写")
-        return "\n".join(lines)
+        return {
+            "schema": "2.0",
+            "config": {"update_multi": True},
+            "header": {
+                "title": {"tag": "plain_text", "content": "裂变图审核"},
+                "template": "blue",
+            },
+            "body": {
+                "direction": "vertical",
+                "padding": "12px 12px 12px 12px",
+                "elements": [
+                    {"tag": "markdown", "content": summary},
+                    {
+                        "tag": "note",
+                        "elements": [
+                            {"tag": "plain_text", "content": "直接点击通过或重做。重做时可在下方填写修改意见。"}
+                        ],
+                    },
+                    {
+                        "tag": "input",
+                        "name": "feedback",
+                        "label": {"tag": "plain_text", "content": "修改意见"},
+                        "placeholder": {"tag": "plain_text", "content": "例如：产品太大，爱心控制在0.5cm直径左右"},
+                    },
+                    {
+                        "tag": "action",
+                        "actions": [
+                            {
+                                "tag": "button",
+                                "text": {"tag": "plain_text", "content": "通过"},
+                                "type": "primary",
+                                "value": {
+                                    "action": "approve",
+                                    "task_id": task_id,
+                                    "round": str(current_round),
+                                    "stage": review_stage,
+                                },
+                            },
+                            {
+                                "tag": "button",
+                                "text": {"tag": "plain_text", "content": "重做"},
+                                "type": "default",
+                                "value": {
+                                    "action": "rework",
+                                    "task_id": task_id,
+                                    "round": str(current_round),
+                                    "stage": review_stage,
+                                },
+                            },
+                        ],
+                    },
+                ],
+            },
+        }
 
     def _build_image_delivery_text(self, payload: dict[str, Any]) -> str:
         lines = ["套图交付通知"]
@@ -212,8 +273,7 @@ class FeishuNotifier:
                 f"轮次：第{payload.get('current_round', '')}轮",
                 f"工作流状态：{payload.get('workflow_status', '')}",
                 f"交付状态：{payload.get('delivery_status', '')}",
-                f"本次交付：主图 {payload.get('main_count', 0)} 张，副图 {payload.get('sub_count', 0)} 张。",
-                "会先发送整套压缩包，再附上预览图；如需逐张原图可再继续补发。",
+                f"本次交付：主图 {payload.get('main_count', 0)} 张，副图 {payload.get('sub_count', 0)} 张",
             ]
         )
         bundle_link = str(payload.get("bundle_link", "") or "")
@@ -274,7 +334,6 @@ class FeishuNotifier:
     def _upload_image(self, image_path: Path) -> dict[str, Any]:
         if not image_path.is_file():
             raise FileNotFoundError(f"Feishu IM image not found: {image_path}")
-
         mime_type = mimetypes.guess_type(image_path.name)[0] or "application/octet-stream"
         boundary = f"----tkfeishuim{uuid4().hex}"
         body = self._encode_multipart(
@@ -304,7 +363,6 @@ class FeishuNotifier:
     def _upload_file(self, file_path: Path) -> dict[str, Any]:
         if not file_path.is_file():
             raise FileNotFoundError(f"Feishu IM file not found: {file_path}")
-
         mime_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
         boundary = f"----tkfeishufile{uuid4().hex}"
         body = self._encode_multipart(
@@ -365,11 +423,8 @@ class FeishuNotifier:
             chunks.append(f"Content-Disposition: form-data; name=\"{key}\"\r\n\r\n".encode("utf-8"))
             chunks.append(str(value).encode("utf-8"))
             chunks.append(b"\r\n")
-
         chunks.append(f"--{boundary}\r\n".encode("utf-8"))
-        chunks.append(
-            f"Content-Disposition: form-data; name=\"{file_field_name}\"; filename=\"{file_name}\"\r\n".encode("utf-8")
-        )
+        chunks.append(f"Content-Disposition: form-data; name=\"{file_field_name}\"; filename=\"{file_name}\"\r\n".encode("utf-8"))
         chunks.append(f"Content-Type: {mime_type}\r\n\r\n".encode("utf-8"))
         chunks.append(file_bytes)
         chunks.append(b"\r\n")
