@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -63,6 +63,17 @@ def download_task(task_id: str, request: Request):
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return FileResponse(path, filename=f'{task_id}.zip', media_type='application/zip')
+
+
+@router.get('/api/tasks/{task_id}/files/{relative_path:path}')
+def read_task_file(task_id: str, relative_path: str, request: Request):
+    try:
+        path = request.app.state.task_service.get_task_file_path(task_id, relative_path)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return FileResponse(path)
 
 
 @router.get('/api/stats/summary', response_model=StatsSummaryResponse)

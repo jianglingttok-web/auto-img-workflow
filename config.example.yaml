@@ -53,9 +53,6 @@ providers:
     api_key: "${VOLCANO_ENGINE_API_KEY}"
     base_url: "https://ark.cn-beijing.volces.com/api/v3"
     models:
-      - id: doubao-seedream-fast
-        name: 豆包 Seedream (快速)
-        price_per_image: 0.04
       - id: doubao-seedream-4-5-251128
         name: 豆包 Seedream (标准)
         price_per_image: 0.08

@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
@@ -10,7 +10,7 @@
   <main class="page">
     <section class="panel hero">
       <h1>TK 裂变素材工厂</h1>
-      <p>统一入口、统一模型、统一成本。提交后自动排队执行，结果直接下载。</p>
+      <p>统一入口、统一模型、统一成本。提交后自动排队执行，结果直接在页面查看。</p>
     </section>
 
     <section class="panel">
@@ -48,13 +48,27 @@
             <span>补充说明</span>
             <textarea name="notes" rows="3" placeholder="可选"></textarea>
           </label>
-          <label>
+          <label class="drop-field">
             <span>产品白底图</span>
-            <input type="file" name="product_image" accept="image/*" required />
+            <div class="dropzone" data-input-id="product_image">
+              <input type="file" id="product_image" name="product_image" accept="image/*" required hidden />
+              <div class="dropzone-copy">
+                <strong>拖拽产品图到这里</strong>
+                <small>或点击选择文件</small>
+                <em class="filename" data-filename-for="product_image">未选择任何文件</em>
+              </div>
+            </div>
           </label>
-          <label>
+          <label class="drop-field">
             <span>参考图</span>
-            <input type="file" name="reference_image" accept="image/*" required />
+            <div class="dropzone" data-input-id="reference_image">
+              <input type="file" id="reference_image" name="reference_image" accept="image/*" required hidden />
+              <div class="dropzone-copy">
+                <strong>拖拽参考图到这里</strong>
+                <small>或点击选择文件</small>
+                <em class="filename" data-filename-for="reference_image">未选择任何文件</em>
+              </div>
+            </div>
           </label>
         </div>
         <div class="actions">
@@ -64,8 +78,18 @@
     </section>
 
     <section class="panel" id="status-panel" hidden>
-      <h2>任务状态</h2>
+      <div class="status-head">
+        <h2>任务状态</h2>
+        <span id="status-pill" class="status-pill">pending</span>
+      </div>
       <dl class="status-grid" id="status-grid"></dl>
+      <div class="result-section" id="result-section" hidden>
+        <div class="result-section-head">
+          <h3>生成结果</h3>
+          <small id="result-hint">页面会自动刷新最新结果</small>
+        </div>
+        <div class="result-gallery" id="result-gallery"></div>
+      </div>
       <div class="actions">
         <a id="download-link" class="button secondary" href="#" hidden>下载结果 ZIP</a>
       </div>
@@ -76,25 +100,63 @@
     const form = document.getElementById('task-form');
     const statusPanel = document.getElementById('status-panel');
     const statusGrid = document.getElementById('status-grid');
+    const statusPill = document.getElementById('status-pill');
     const downloadLink = document.getElementById('download-link');
+    const resultSection = document.getElementById('result-section');
+    const resultGallery = document.getElementById('result-gallery');
     let currentTaskId = '';
     let pollTimer = null;
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
 
     function renderOptions(payload) {
       const groupSelect = document.getElementById('group_name');
       const siteSelect = document.getElementById('site');
       const typeSelect = document.getElementById('fission_type');
       const modelSelect = document.getElementById('model_id');
-      groupSelect.innerHTML = payload.groups.map(v => `<option value="${v}">${v}</option>`).join('');
-      siteSelect.innerHTML = payload.sites.map(v => `<option value="${v}">${v}</option>`).join('');
-      typeSelect.innerHTML = payload.fission_types.map(v => `<option value="${v.value}">${v.label}${v.experimental ? '（实验）' : ''}</option>`).join('');
-      modelSelect.innerHTML = payload.models.map(v => `<option value="${v.model_id}">${v.label}</option>`).join('');
+      groupSelect.innerHTML = payload.groups.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+      siteSelect.innerHTML = payload.sites.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+      typeSelect.innerHTML = payload.fission_types.map(v => `<option value="${escapeHtml(v.value)}">${escapeHtml(v.label)}${v.experimental ? '（实验）' : ''}</option>`).join('');
+      modelSelect.innerHTML = payload.models.map(v => `<option value="${escapeHtml(v.model_id)}">${escapeHtml(v.label)}</option>`).join('');
+    }
+
+    function statusLabel(status) {
+      const map = {
+        pending: '排队中',
+        running: '生成中',
+        succeeded: '已完成',
+        failed: '失败',
+        expired: '已过期',
+      };
+      return map[status] || status;
+    }
+
+    function renderGallery(imageUrls) {
+      if (!imageUrls || imageUrls.length === 0) {
+        resultSection.hidden = true;
+        resultGallery.innerHTML = '';
+        return;
+      }
+      resultSection.hidden = false;
+      resultGallery.innerHTML = imageUrls.map((url, index) => `
+        <figure class="result-card">
+          <img src="${escapeHtml(url)}" alt="生成结果 ${index + 1}" loading="lazy" />
+          <figcaption>结果 ${index + 1}</figcaption>
+        </figure>
+      `).join('');
     }
 
     function renderStatus(payload) {
       const rows = [
         ['任务ID', payload.task_id],
-        ['状态', payload.status],
+        ['状态', statusLabel(payload.status)],
         ['排队位置', payload.queue_position],
         ['组别', payload.group_name],
         ['运营名', payload.operator_name || '-'],
@@ -104,11 +166,14 @@
         ['数量', payload.count],
         ['预估成本', `$${Number(payload.estimated_cost || 0).toFixed(2)}`],
         ['实际成本', payload.actual_cost == null ? '-' : `$${Number(payload.actual_cost).toFixed(2)}`],
-        ['产出数量', payload.result_count],
+        ['产出数量', `${payload.result_count} / ${payload.count}`],
         ['错误', payload.error_message || '-'],
       ];
-      statusGrid.innerHTML = rows.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('');
+      statusGrid.innerHTML = rows.map(([k, v]) => `<div class="k">${escapeHtml(k)}</div><div class="v">${escapeHtml(v)}</div>`).join('');
+      statusPill.textContent = statusLabel(payload.status);
+      statusPill.className = `status-pill status-${payload.status}`;
       statusPanel.hidden = false;
+      renderGallery(payload.image_urls || []);
       if (payload.download_url) {
         downloadLink.hidden = false;
         downloadLink.href = payload.download_url;
@@ -120,6 +185,30 @@
     async function fetchOptions() {
       const res = await fetch('/api/options');
       renderOptions(await res.json());
+    }
+
+    function updateFilename(input) {
+      const holder = document.querySelector(`[data-filename-for="${input.id}"]`);
+      if (!holder) return;
+      holder.textContent = input.files && input.files[0] ? input.files[0].name : '未选择任何文件';
+    }
+
+    function bindDropzone(zone) {
+      const input = document.getElementById(zone.dataset.inputId);
+      zone.addEventListener('click', () => input.click());
+      zone.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        zone.classList.add('is-dragover');
+      });
+      zone.addEventListener('dragleave', () => zone.classList.remove('is-dragover'));
+      zone.addEventListener('drop', (event) => {
+        event.preventDefault();
+        zone.classList.remove('is-dragover');
+        if (!event.dataTransfer?.files?.length) return;
+        input.files = event.dataTransfer.files;
+        updateFilename(input);
+      });
+      input.addEventListener('change', () => updateFilename(input));
     }
 
     async function pollTask(taskId) {
@@ -151,6 +240,7 @@
       pollTimer = window.setInterval(() => pollTask(currentTaskId), 3000);
     });
 
+    document.querySelectorAll('.dropzone').forEach(bindDropzone);
     fetchOptions();
   </script>
 </body>

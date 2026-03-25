@@ -266,6 +266,7 @@ class SeedreamJobPlanner:
                     "reference_images": {
                         "product_white_background": refs.get("product_white_background", []),
                         "usage_images": refs.get("usage_images", []),
+                        "style_reference_images": refs.get("style_reference_images", []),
                     },
                     "output_spec": {"ratio": "1:1", "count": 1},
                 })

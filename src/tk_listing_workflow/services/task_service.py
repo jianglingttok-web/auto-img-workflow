@@ -172,6 +172,14 @@ class FactoryTaskService:
             "notes": notes,
             "request_fingerprint": fingerprint,
         })
+        write_json(task_dir / "image_assets.json", {
+            "product_id": task_id,
+            "main_images": [],
+            "sub_images": [],
+            "detail_images": [],
+            "a_plus_images": [],
+            "generation_meta": {},
+        })
         write_json(task_dir / "manifest.json", {
             "task_id": task_id,
             "status": "pending",
@@ -303,6 +311,7 @@ class FactoryTaskService:
             "actual_cost": float(row["actual_cost"]) if row["actual_cost"] is not None else None,
             "result_count": result_count,
             "download_url": download_url,
+            "image_urls": self._result_image_urls(task_id),
             "experimental": self._is_experimental(str(row["fission_type"])),
             "error_message": row["error_message"] or "",
             "created_at": float(row["created_at"]),
@@ -317,6 +326,17 @@ class FactoryTaskService:
         if not zip_path.is_file():
             raise FileNotFoundError("result zip not found")
         return zip_path
+
+    def get_task_file_path(self, task_id: str, relative_path: str) -> Path:
+        task_dir = (self.runtime_root / task_id).resolve()
+        if not task_dir.exists():
+            raise ValueError("task not found")
+        candidate = (task_dir / relative_path).resolve()
+        if task_dir not in candidate.parents and candidate != task_dir:
+            raise ValueError("invalid task file path")
+        if not candidate.is_file():
+            raise FileNotFoundError("task file not found")
+        return candidate
 
     def stats_summary(self) -> dict[str, Any]:
         return self.usage.summary()
@@ -587,6 +607,21 @@ class FactoryTaskService:
         with sqlite3.connect(self.db_path) as conn:
             row = conn.execute("SELECT COUNT(*) FROM usage WHERE task_id = ?", (task_id,)).fetchone()
             return int(row[0] or 0)
+
+    def _result_image_urls(self, task_id: str) -> list[str]:
+        task_dir = self.runtime_root / task_id
+        media_dir = task_dir / "media"
+        if not media_dir.exists():
+            return []
+        urls: list[str] = []
+        for path in sorted(media_dir.rglob('*')):
+            if not path.is_file() or path.suffix.lower() not in {'.png', '.jpg', '.jpeg', '.webp'}:
+                continue
+            if 'preview' in path.parts:
+                continue
+            relative = path.relative_to(task_dir).as_posix()
+            urls.append(f"/api/tasks/{task_id}/files/{relative}")
+        return urls
 
     def _is_experimental(self, fission_type: str) -> bool:
         return bool(FISSION_TYPES.get(fission_type, {}).get("experimental", False))

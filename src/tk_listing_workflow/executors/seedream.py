@@ -110,13 +110,12 @@ class SeedreamExecutor:
 
     def _normalize_references(self, task_dir: Path, reference_images: dict[str, Any], image_type: str) -> list[str]:
         candidates: list[str] = []
-        for key in ("product_white_background", "usage_images", "style_reference_images"):
+        priority = ("style_reference_images", "usage_images", "product_white_background") if image_type == "main" else ("product_white_background", "usage_images", "style_reference_images")
+        for key in priority:
             values = reference_images.get(key, [])
-            if image_type == "main" and key == "style_reference_images":
-                continue
             for value in values:
                 normalized = self._coerce_reference(task_dir, value)
-                if normalized:
+                if normalized and normalized not in candidates:
                     candidates.append(normalized)
         return candidates
 

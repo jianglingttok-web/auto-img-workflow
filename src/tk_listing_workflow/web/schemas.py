@@ -1,62 +1,60 @@
-"""
-Pydantic schemas for web API.
-"""
-from pydantic import BaseModel
-from typing import Optional, List
-from datetime import datetime
+from __future__ import annotations
+
+from pydantic import BaseModel, Field
 
 
-class TaskCreateResponse(BaseModel):
-    """Response when creating a new task."""
-    task_id: str
-    position_in_queue: int
-    message: str
-
-
-class TaskStatusResponse(BaseModel):
-    """Task status response."""
-    task_id: str
-    status: str
-    site: str
-    fission_type: str
-    provider: str
+class ModelOption(BaseModel):
     model_id: str
-    count: int
-    estimated_cost: float
-    actual_cost: Optional[float]
-    product_image_path: str
-    reference_image_path: str
-    result_zip_path: Optional[str]
-    notes: Optional[str]
-    error_message: Optional[str]
-    created_at: float
-    updated_at: float
-    expires_at: float
+    label: str
+    price_per_image: float
 
 
-class StatsSummaryResponse(BaseModel):
-    """Cost statistics summary response."""
-    total_images: int
-    total_cost_estimated: float
-    total_cost_actual: Optional[float]
-    by_month: List[dict]
-    by_model: List[dict]
+class FissionTypeOption(BaseModel):
+    value: str
+    label: str
+    experimental: bool = False
 
 
 class OptionsResponse(BaseModel):
-    """Options for frontend dropdowns."""
-    sites: List[str]
-    fission_types: List[dict]
-    models: List[dict]
+    groups: list[str]
+    sites: list[str]
+    fission_types: list[FissionTypeOption]
+    models: list[ModelOption]
 
 
-class FissionType:
-    SAME_PRODUCT = "same_product_fission"
-    SAME_STYLE_PRODUCT_SWAP = "same_style_product_swap"
-    
-    @classmethod
-    def choices(cls):
-        return [
-            {"value": cls.SAME_PRODUCT, "label": "同一产品裂变"},
-            {"value": cls.SAME_STYLE_PRODUCT_SWAP, "label": "同风格换产品"},
-        ]
+class TaskCreateResponse(BaseModel):
+    task_id: str
+    status: str
+    position_in_queue: int = 0
+    deduplicated: bool = False
+    experimental: bool = False
+
+
+class TaskStatusResponse(BaseModel):
+    task_id: str
+    status: str
+    queue_position: int = 0
+    site: str
+    fission_type: str
+    group_name: str
+    operator_name: str = ""
+    model_id: str
+    count: int
+    estimated_cost: float
+    actual_cost: float | None = None
+    result_count: int = 0
+    download_url: str | None = None
+    image_urls: list[str] = Field(default_factory=list)
+    experimental: bool = False
+    error_message: str = ""
+    created_at: float
+    updated_at: float
+
+
+class StatsSummaryResponse(BaseModel):
+    total_images: int = 0
+    total_cost_estimated: float = Field(default=0)
+    total_cost_actual: float = Field(default=0)
+    by_month: list[dict] = Field(default_factory=list)
+    by_model: list[dict] = Field(default_factory=list)
+    by_group: list[dict] = Field(default_factory=list)
